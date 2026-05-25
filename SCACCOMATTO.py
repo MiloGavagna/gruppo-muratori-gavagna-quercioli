@@ -44,17 +44,14 @@ CAPT_DARK = (195, 195, 80)
 KING_CAPT_LIGHT = (144, 238, 144) 
 KING_CAPT_DARK = (60, 179, 113)   
 
-# Colore speciale per l'Arrocco (Verde Chiaro)
 CASTLE_LIGHT = (160, 255, 160)
 CASTLE_DARK = (90, 200, 90)
 
-# Colore speciale per lo Scacco (Rosso)
 CHECK_RED_LIGHT = (255, 120, 120)
 CHECK_RED_DARK = (220, 80, 80)
 
 WHITE = (255, 255, 255)
 YELLOW = (255, 235, 120)
-MINECRAFT_ORANGE = (255, 180, 50)  
 QUIT_RED = (180, 70, 70)           
 GREEN_TEXT = (144, 238, 144)     
 CREDITS_GRAY = (180, 180, 180)
@@ -68,7 +65,6 @@ def get_font(size):
     except:
         return pygame.font.SysFont("impact", size)
 
-font_splash = get_font(28) 
 font_small = get_font(30)
 font = get_font(50)
 font_big = get_font(75)
@@ -101,13 +97,16 @@ game_over = False
 winner = ""
 last_double_pawn = None
 
-game_state = "MENU"
+game_state = "MENU"       # Stati possibili: "MENU", "MODE_MENU", "GAME"
+game_mode = "STANDARD"    # Modalità possibili: "STANDARD", "CHAOS"
+
 play_rect = None
 quit_rect = None
+standard_rect = None
+chaos_rect = None
 rematch_rect = None
 win_quit_rect = None
 
-# Tracciamento movimento per l'Arrocco
 has_moved = {
     "wk": False, "bk": False,
     "wr_l": False, "wr_r": False, 
@@ -131,17 +130,41 @@ generate_menu_background()
 def reset_game():
     global board, selected, valid_moves, turn, game_over, winner, last_double_pawn, has_moved
     
-    board = [
-        ["br","bn","bb","bq","bk","bb","bn","br"],
-        ["bp","bp","bp","bp","bp","bp","bp","bp"],
-        ["","","","","","","",""],
-        ["","","","","","","",""],
-        ["","","","","","","",""],
-        ["","","","","","","",""],
-        ["wp","wp","wp","wp","wp","wp","wp","wp"],
-        ["wr","wn","wb","wq","wk","wb","wn","wr"]
-    ]
-    
+    if game_mode == "STANDARD":
+        board = [
+            ["br","bn","bb","bq","bk","bb","bn","br"],
+            ["bp","bp","bp","bp","bp","bp","bp","bp"],
+            ["","","","","","","",""],
+            ["","","","","","","",""],
+            ["","","","","","","",""],
+            ["","","","","","","",""],
+            ["wp","wp","wp","wp","wp","wp","wp","wp"],
+            ["wr","wn","wb","wq","wk","wb","wn","wr"]
+        ]
+    else: # MODALITÀ CHAOS
+        # Genera 16 pezzi casuali Neri assicurando almeno un Re ('k')
+        b_types = [random.choice(['p', 'r', 'n', 'b', 'q', 'k']) for _ in range(16)]
+        if 'k' not in b_types:
+            b_types[random.randint(0, 15)] = 'k'
+        b_pieces = ['b' + t for t in b_types]
+        
+        # Genera 16 pezzi casuali Bianchi assicurando almeno un Re ('k')
+        w_types = [random.choice(['p', 'r', 'n', 'b', 'q', 'k']) for _ in range(16)]
+        if 'k' not in w_types:
+            w_types[random.randint(0, 15)] = 'k'
+        w_pieces = ['w' + t for t in w_types]
+        
+        board = [
+            b_pieces[0:8],
+            b_pieces[8:16],
+            ["","","","","","","",""],
+            ["","","","","","","",""],
+            ["","","","","","","",""],
+            ["","","","","","","",""],
+            w_pieces[0:8],
+            w_pieces[8:16]
+        ]
+        
     selected = None
     valid_moves = []
     turn = "w"
@@ -157,13 +180,11 @@ def reset_game():
 
 reset_game()
 
-# ---------------- MENU PRINCIPALE ----------------
-def draw_main_menu():
-    global play_rect, quit_rect
-    
+# ---------------- SCHERMATE DI MENU ----------------
+def draw_menu_base():
+    """Disegna la griglia e i pezzi decorativi comuni ai menu"""
     tile_w = WIDTH // 8
     tile_h = HEIGHT // 8
-    
     for y in range(-1, 9): 
         for x in range(-1, 9):
             color = LIGHT if (x+y)%2==0 else DARK
@@ -182,26 +203,39 @@ def draw_main_menu():
     title_surf = font_title.render("SCACCOMATTO", True, YELLOW)
     title_rect = title_surf.get_rect(center=(WIDTH//2, HEIGHT//2 - 90))
     screen.blit(title_surf, title_rect)
+
+def draw_main_menu():
+    global play_rect, quit_rect
+    draw_menu_base()
     
-    splash_text = "by Mc Quer Albs Studios"
-    splash_surf = font_splash.render(splash_text, True, MINECRAFT_ORANGE)
-    rotated_splash = pygame.transform.rotate(splash_surf, 15)
-    splash_rect = rotated_splash.get_rect()
-    splash_rect.left = title_rect.right - 80
-    splash_rect.bottom = title_rect.top + 30
-    screen.blit(rotated_splash, splash_rect)
-    
+    # Bottone Play
     play_surf = font.render("- Play -", True, WHITE)
     play_rect = play_surf.get_rect(center=(WIDTH//2, HEIGHT//2 + 20))
     screen.blit(play_surf, play_rect)
     
+    # Bottone Quit
     quit_surf = font.render("- Quit -", True, QUIT_RED)
     quit_rect = quit_surf.get_rect(center=(WIDTH//2, HEIGHT//2 + 90))
     screen.blit(quit_surf, quit_rect)
     
+    # Crediti in basso a sinistra
     credits_surf = font_small.render("by Mc Quer Albs Studios", True, CREDITS_GRAY)
     credits_rect = credits_surf.get_rect(bottomleft=(30, HEIGHT - 30))
     screen.blit(credits_surf, credits_rect)
+
+def draw_mode_menu():
+    global standard_rect, chaos_rect
+    draw_menu_base() # Disegna solo sfondo e Titolo (le altre scritte scompaiono)
+    
+    # Bottone Standard (A Sinistra)
+    standard_surf = font.render("- Standard -", True, WHITE)
+    standard_rect = standard_surf.get_rect(center=(WIDTH//2 - 140, HEIGHT//2 + 40))
+    screen.blit(standard_surf, standard_rect)
+    
+    # Bottone Chaos (A Destra, Rosso chiaro)
+    chaos_surf = font.render("- Chaos -", True, CHECK_RED_LIGHT)
+    chaos_rect = chaos_surf.get_rect(center=(WIDTH//2 + 140, HEIGHT//2 + 40))
+    screen.blit(chaos_surf, chaos_rect)
 
 # ---------------- WIN SCREEN ----------------
 def draw_win_screen(winner_text):
@@ -241,7 +275,6 @@ def path_clear(x1, y1, x2, y2):
     return True
 
 def attacks_square(ex, ey, tx, ty, piece):
-    """Verifica se un pezzo in (ex, ey) attacca la casella (tx, ty) ignorando regole speciali"""
     color = piece[0]
     kind = piece[1]
     dx, dy = tx - ex, ty - ey
@@ -257,7 +290,6 @@ def attacks_square(ex, ey, tx, ty, piece):
     return False
 
 def is_under_attack(tx, ty, color):
-    """Restituisce True se (tx, ty) è attaccata da un pezzo nemico (diverso da 'color')"""
     for y in range(8):
         for x in range(8):
             p = board[y][x]
@@ -266,34 +298,32 @@ def is_under_attack(tx, ty, color):
     return False
 
 def get_check_path(color):
-    """Trova il percorso rosso se il re di 'color' è sotto scacco."""
-    # Trova il re
-    kx, ky = -1, -1
+    """Trova le linee di attacco verso QUALSIASI re del colore corrente (Valido anche in Chaos)"""
+    path = []
+    # Cerca tutti i re del colore corrente presenti sulla scacchiera
+    kings_positions = []
     for y in range(8):
         for x in range(8):
             if board[y][x] == color + "k":
-                kx, ky = x, y
-                break
-    if kx == -1: return [] # Re non trovato (strano)
-    
-    path = []
-    for y in range(8):
-        for x in range(8):
-            p = board[y][x]
-            if p != "" and p[0] != color:
-                if attacks_square(x, y, kx, ky, p):
-                    path.append((kx, ky))
-                    path.append((x, y))
-                    # Se è torre, alfiere o regina aggiunge le caselle intermedie
-                    if p[1] in ['r', 'b', 'q']:
-                        dx, dy = kx - x, ky - y
-                        step_x = 0 if dx == 0 else (1 if dx > 0 else -1)
-                        step_y = 0 if dy == 0 else (1 if dy > 0 else -1)
-                        cx, cy = x + step_x, y + step_y
-                        while (cx, cy) != (kx, ky):
-                            path.append((cx, cy))
-                            cx += step_x
-                            cy += step_y
+                kings_positions.append((x, y))
+                
+    for kx, ky in kings_positions:
+        for y in range(8):
+            for x in range(8):
+                p = board[y][x]
+                if p != "" and p[0] != color:
+                    if attacks_square(x, y, kx, ky, p):
+                        if (kx, ky) not in path: path.append((kx, ky))
+                        if (x, y) not in path: path.append((x, y))
+                        if p[1] in ['r', 'b', 'q']:
+                            dx, dy = kx - x, ky - y
+                            step_x = 0 if dx == 0 else (1 if dx > 0 else -1)
+                            step_y = 0 if dy == 0 else (1 if dy > 0 else -1)
+                            cx, cy = x + step_x, y + step_y
+                            while (cx, cy) != (kx, ky):
+                                if (cx, cy) not in path: path.append((cx, cy))
+                                cx += step_x
+                                cy += step_y
     return path
 
 def valid_move(x1, y1, x2, y2):
@@ -306,20 +336,17 @@ def valid_move(x1, y1, x2, y2):
     if target != "" and target[0] == color: return False
     dx, dy = x2 - x1, y2 - y1
 
-    # Arrocco
-    if kind == "k" and abs(dx) == 2 and dy == 0:
+    # Arrocco (Consentito solo in modalità STANDARD)
+    if kind == "k" and abs(dx) == 2 and dy == 0 and game_mode == "STANDARD":
         row = 7 if color == "w" else 0
         if y1 != row or y2 != row: return False
-        
-        # Lato Destro (Corto)
-        if dx == 2:
+        if dx == 2: # Corto
             rook_key = "wr_r" if color == "w" else "br_r"
             if not has_moved[color + "k"] and not has_moved.get(rook_key, False):
                 if board[row][5] == "" and board[row][6] == "":
                     if not is_under_attack(4, row, color) and not is_under_attack(5, row, color) and not is_under_attack(6, row, color):
                         return True
-        # Lato Sinistro (Lungo)
-        elif dx == -2:
+        elif dx == -2: # Lungo
             rook_key = "wr_l" if color == "w" else "br_l"
             if not has_moved[color + "k"] and not has_moved.get(rook_key, False):
                 if board[row][1] == "" and board[row][2] == "" and board[row][3] == "":
@@ -348,7 +375,7 @@ def valid_move(x1, y1, x2, y2):
     
     return False
 
-# ---------------- DISEGNO GIOCO ----------------
+# ---------------- RENDERING GRAFICA DI GIOCO ----------------
 def draw_highlights():
     if selected:
         x, y = selected
@@ -360,14 +387,12 @@ def draw_highlights():
             target_piece = board[my][mx]
             is_capture = target_piece != ""
             
-            # Controllo En Passant
             if p_selected and p_selected[1] == "p" and mx != x and target_piece == "":
                 is_capture = True 
                 target_piece = board[y][mx]
 
-            # Scelta Colore
             if p_selected and p_selected[1] == "k" and abs(mx - x) == 2:
-                # Arrocco (Verde Chiaro Speciale)
+                # Arrocco (Verde Chiaro)
                 color = CASTLE_LIGHT if (mx + my) % 2 == 0 else CASTLE_DARK
             elif is_capture:
                 if target_piece != "" and target_piece[1] == "k":
@@ -388,13 +413,12 @@ def draw_board():
         BOARD_SIZE + (BORDER_THICKNESS * 2), BOARD_SIZE + (BORDER_THICKNESS * 2)
     ))
     
-    # 1. Disegna le caselle base
     for y in range(8):
         for x in range(8):
             color = LIGHT if (x+y)%2==0 else DARK
             pygame.draw.rect(screen, color, (OFFSET_X + x*TILE, OFFSET_Y + y*TILE, TILE, TILE))
             
-    # 2. Sovrascrive di Rosso le caselle dello scacco se presente
+    # Colora di Rosso il percorso dello scacco
     check_path = get_check_path(turn)
     for cx, cy in check_path:
         r_color = CHECK_RED_LIGHT if (cx + cy) % 2 == 0 else CHECK_RED_DARK
@@ -411,6 +435,7 @@ def draw_pieces():
                 )
 
 def check_king():
+    """Controlla se almeno un re bianco e un re nero sono vivi (funziona anche per i Re multipli in Chaos)"""
     w = b = False
     for row in board:
         for p in row:
@@ -418,7 +443,7 @@ def check_king():
             if p == "bk": b = True
     return w, b
 
-# ---------------- LOOP PRINCIPALE ----------------
+# ---------------- LOOP PRINCIPALE GIOCO ----------------
 running = True
 
 while running:
@@ -426,6 +451,8 @@ while running:
 
     if game_state == "MENU":
         draw_main_menu()
+    elif game_state == "MODE_MENU":
+        draw_mode_menu()
     elif game_state == "GAME":
         draw_board()
         draw_highlights() 
@@ -446,13 +473,25 @@ while running:
         if event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = pygame.mouse.get_pos()
             
+            # 1. Click nello stato MENU PRINCIPALE
             if game_state == "MENU":
                 if play_rect and play_rect.collidepoint((mx, my)):
-                    reset_game()
-                    game_state = "GAME"
+                    game_state = "MODE_MENU" # Passa alla selezione della modalità
                 elif quit_rect and quit_rect.collidepoint((mx, my)):
                     running = False
             
+            # 2. Click nello stato MENU SELEZIONE MODALITÀ
+            elif game_state == "MODE_MENU":
+                if standard_rect and standard_rect.collidepoint((mx, my)):
+                    game_mode = "STANDARD"
+                    reset_game()
+                    game_state = "GAME"
+                elif chaos_rect and chaos_rect.collidepoint((mx, my)):
+                    game_mode = "CHAOS"
+                    reset_game()
+                    game_state = "GAME"
+            
+            # 3. Click nello stato GAMEPLAY / FINE PARTITA
             elif game_state == "GAME":
                 if game_over:
                     if rematch_rect and rematch_rect.collidepoint((mx, my)):
@@ -469,7 +508,7 @@ while running:
                             piece = board[y1][x1]
 
                             if valid_move(x1, y1, x, y):
-                                # Tracciamento movimento per Arrocco
+                                # Registrazione movimento per Arrocco
                                 if piece == "wk": has_moved["wk"] = True
                                 if piece == "bk": has_moved["bk"] = True
                                 if piece == "wr" and x1 == 0 and y1 == 7: has_moved["wr_l"] = True
@@ -477,28 +516,26 @@ while running:
                                 if piece == "br" and x1 == 0 and y1 == 0: has_moved["br_l"] = True
                                 if piece == "br" and x1 == 7 and y1 == 0: has_moved["br_r"] = True
                                 
-                                # Esecuzione Arrocco (sposta anche la torre)
+                                # Esecuzione Arrocco
                                 if piece[1] == "k" and abs(x - x1) == 2:
-                                    if x > x1: # Corto
-                                        board[y][5] = board[y][7]
-                                        board[y][7] = ""
-                                    else: # Lungo
-                                        board[y][3] = board[y][0]
-                                        board[y][0] = ""
+                                    if x > x1: 
+                                        board[y][5] = board[y][7]; board[y][7] = ""
+                                    else: 
+                                        board[y][3] = board[y][0]; board[y][0] = ""
 
                                 # En Passant
                                 if piece[1] == "p" and abs(x - x1) == 1 and board[y][x] == "":
                                     board[y1][x] = ""
 
-                                # Movimento normale
+                                # Spostamento Pezzo
                                 board[y][x] = piece
                                 board[y1][x1] = ""
 
-                                # Promozione Pedone
+                                # Promozione Pedone Automatica in Regina
                                 if piece[1] == "p" and (y == 0 or y == 7):
                                     board[y][x] = piece[0] + "q"
 
-                                # Controllo doppio passo pedone (per En Passant futuro)
+                                # En Passant setup doppio passo
                                 if piece[1] == "p" and abs(y - y1) == 2:
                                     last_double_pawn = (x, y, piece[0])
                                 else:
