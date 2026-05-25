@@ -1,5 +1,6 @@
 import pygame
 import os
+import sys
 import random
 
 pygame.init()
@@ -18,75 +19,93 @@ OFFSET_Y = (HEIGHT - BOARD_SIZE) // 2
 
 BORDER_THICKNESS = 12
 
+# Dimensione base dei pezzi e offset di centratura
 PIECE_SIZE = int(TILE * 0.90)
 PIECE_OFFSET = (TILE - PIECE_SIZE) // 2
 
 MENU_GRID_OFFSET_X = 25
 MENU_GRID_OFFSET_Y = 25
 
-# ---------------- COLORS ----------------
-BG_WHITE = (240, 240, 240)
-BG_BLACK = (30, 30, 30)
+# ---------------- PERCORSI DINAMICI INFALLIBILI (ANTI-BUG) ----------------
+# Trova la cartella esatta in cui risiede questo file di script
+CARTELLA_BASE = os.path.dirname(os.path.abspath(__file__))
+# Crea il percorso sicuro verso la cartella "assets"
+CARTELLA_ASSETS = os.path.join(CARTELLA_BASE, "assets")
 
-LIGHT = (200, 200, 200)
-DARK = (120, 120, 120)
-BOARD_BORDER_COLOR = (70, 70, 70)  
+# ---------------- SISTEMA SKIN (COLORI) ----------------
+SKINS = ["classic", "woody"]
+current_skin_idx = 0
 
+SKIN_COLORS = {
+    "classic": {
+        "light": (200, 200, 200),
+        "dark": (120, 120, 120),
+        "border": (70, 70, 70),
+        "bg_w": (240, 240, 240),
+        "bg_b": (30, 30, 30)
+    },
+    "woody": {
+        "light": (210, 180, 140),   # Legno chiaro
+        "dark": (139, 69, 19),      # Legno scuro
+        "border": (92, 58, 33),     # Marrone molto scuro
+        "bg_w": (175, 165, 150),    # Marrone molto desaturato
+        "bg_b": (80, 70, 60)        # Marrone scuro molto desaturato
+    }
+}
+
+# ---------------- COLORI DI SISTEMA ----------------
 SELECT_LIGHT = (190, 235, 255)   
 SELECT_DARK = (110, 180, 220)     
-
-MOVE_LIGHT = (170, 225, 255)     
-MOVE_DARK = (90, 170, 210)      
-
-CAPT_LIGHT = (255, 255, 170)     
-CAPT_DARK = (195, 195, 80)       
-
+MOVE_LIGHT = (170, 225, 255)      
+MOVE_DARK = (90, 170, 210)       
+CAPT_LIGHT = (255, 255, 170)      
+CAPT_DARK = (195, 195, 80)        
 KING_CAPT_LIGHT = (144, 238, 144) 
 KING_CAPT_DARK = (60, 179, 113)   
-
 CASTLE_LIGHT = (160, 255, 160)
 CASTLE_DARK = (90, 200, 90)
-
 CHECK_RED_LIGHT = (255, 120, 120)
 CHECK_RED_DARK = (220, 80, 80)
 
 WHITE = (255, 255, 255)
 YELLOW = (255, 235, 120)
-QUIT_RED = (180, 70, 70)           
+QUIT_RED = (180, 70, 70)            
 GREEN_TEXT = (144, 238, 144)     
 CREDITS_GRAY = (180, 180, 180)
 
-# ---------------- FONT PERSONALIZZATO ----------------
-FONT_PATH = os.path.join("assets", "pixel_font.ttf")
+# ---------------- FONT DI SISTEMA ----------------
+font_small = pygame.font.SysFont("impact", 30)
+font = pygame.font.SysFont("impact", 50)
+font_big = pygame.font.SysFont("impact", 75)
+font_title = pygame.font.SysFont("impact", 110)
 
-def get_font(size):
-    try:
-        return pygame.font.Font(FONT_PATH, size)
-    except:
-        return pygame.font.SysFont("impact", size)
-
-font_small = get_font(30)
-font = get_font(50)
-font_big = get_font(75)
-font_title = get_font(110)
-
-# ---------------- CARICAMENTO ASSET PNG ----------------
-PIECE_IMAGES = {}
+# ---------------- CARICAMENTO ASSET PNG CON CONTROLLO PERCORSI ----------------
+PIECE_IMAGES = {"classic": {}, "woody": {}}
 pieces_names = ["wp", "wr", "wn", "wb", "wq", "wk", "bp", "br", "bn", "bb", "bq", "bk"]
 
 piece_names_map = {"p": "pawn", "r": "tower", "n": "knight", "b": "bishop", "q": "queen", "k": "king"}
 color_names_map = {"w": "white", "b": "black"}
 
-for name in pieces_names:
-    color_str = color_names_map[name[0]]
-    piece_str = piece_names_map[name[1]]
-    filename = f"spr_{piece_str}_{color_str}.png"
-    path = os.path.join("assets", filename)
-    try:
-        img = pygame.image.load(path).convert_alpha()
-        PIECE_IMAGES[name] = pygame.transform.scale(img, (PIECE_SIZE, PIECE_SIZE))
-    except FileNotFoundError:
-        pass
+for skin in SKINS:
+    target_size = PIECE_SIZE
+    if skin == "woody":
+        target_size = int(PIECE_SIZE * 1.20)
+        
+    for name in pieces_names:
+        color_str = color_names_map[name[0]]
+        piece_str = piece_names_map[name[1]]
+        filename = f"spr_{piece_str}_{color_str}.png"
+        
+        # Costruisce il percorso assoluto dinamico specifico per la skin corrente
+        path = os.path.join(CARTELLA_ASSETS, skin, filename)
+        
+        try:
+            img = pygame.image.load(path).convert_alpha()
+            PIECE_IMAGES[skin][name] = pygame.transform.scale(img, (target_size, target_size))
+        except FileNotFoundError:
+            print(f"⚠️ ATTENZIONE: Immagine '{filename}' non trovata per la skin '{skin}'!")
+            print(f"Percorso cercato: {path}")
+            print("Controlla che i file grafici siano dentro la cartella degli asset.")
 
 # ---------------- VARIABILI DI STATO GLOBALI ----------------
 board = []
@@ -97,15 +116,18 @@ game_over = False
 winner = ""
 last_double_pawn = None
 
-game_state = "MENU"       # Stati possibili: "MENU", "MODE_MENU", "GAME"
-game_mode = "STANDARD"    # Modalità possibili: "STANDARD", "CHAOS"
+game_state = "MENU"       
+game_mode = "STANDARD"    
 
 play_rect = None
+skin_rect = None
 quit_rect = None
 standard_rect = None
 chaos_rect = None
 rematch_rect = None
 win_quit_rect = None
+win_menu_rect = None
+ingame_menu_rect = None   # Nuovo rettangolo per il tasto "M" in gioco
 
 has_moved = {
     "wk": False, "bk": False,
@@ -141,14 +163,12 @@ def reset_game():
             ["wp","wp","wp","wp","wp","wp","wp","wp"],
             ["wr","wn","wb","wq","wk","wb","wn","wr"]
         ]
-    else: # MODALITÀ CHAOS
-        # Genera 16 pezzi casuali Neri assicurando almeno un Re ('k')
+    else: 
         b_types = [random.choice(['p', 'r', 'n', 'b', 'q', 'k']) for _ in range(16)]
         if 'k' not in b_types:
             b_types[random.randint(0, 15)] = 'k'
         b_pieces = ['b' + t for t in b_types]
         
-        # Genera 16 pezzi casuali Bianchi assicurando almeno un Re ('k')
         w_types = [random.choice(['p', 'r', 'n', 'b', 'q', 'k']) for _ in range(16)]
         if 'k' not in w_types:
             w_types[random.randint(0, 15)] = 'k'
@@ -182,19 +202,32 @@ reset_game()
 
 # ---------------- SCHERMATE DI MENU ----------------
 def draw_menu_base():
-    """Disegna la griglia e i pezzi decorativi comuni ai menu"""
+    skin_name = SKINS[current_skin_idx]
+    colors = SKIN_COLORS[skin_name]
+    
+    # Calcoliamo la dimensione corretta del pezzo in base alla skin (identico a draw_pieces)
+    target_size = PIECE_SIZE
+    if skin_name == "woody":
+        target_size = int(PIECE_SIZE * 1.20)
+        
+    # Calcoliamo l'offset di centratura dinamico per la griglia del menu
     tile_w = WIDTH // 8
     tile_h = HEIGHT // 8
+    offset_center_x = (tile_w - target_size) // 2
+    offset_center_y = (tile_h - target_size) // 2
+
+    # Disegna la scacchiera di sfondo
     for y in range(-1, 9): 
         for x in range(-1, 9):
-            color = LIGHT if (x+y)%2==0 else DARK
+            color = colors["light"] if (x+y)%2==0 else colors["dark"]
             pygame.draw.rect(screen, color, (x * tile_w + MENU_GRID_OFFSET_X, y * tile_h + MENU_GRID_OFFSET_Y, tile_w, tile_h))
             
+    # Disegna i pezzi decorativi di sfondo ben centrati e della scala corretta
     for rx, ry, r_piece in menu_bg_pieces:
-        if r_piece in PIECE_IMAGES:
-            px = rx * tile_w + MENU_GRID_OFFSET_X + (tile_w - PIECE_SIZE) // 2
-            py = ry * tile_h + MENU_GRID_OFFSET_Y + (tile_h - PIECE_SIZE) // 2
-            screen.blit(PIECE_IMAGES[r_piece], (px, py))
+        if r_piece in PIECE_IMAGES[skin_name]:
+            px = rx * tile_w + MENU_GRID_OFFSET_X + offset_center_x
+            py = ry * tile_h + MENU_GRID_OFFSET_Y + offset_center_y
+            screen.blit(PIECE_IMAGES[skin_name][r_piece], (px, py))
             
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 170))
@@ -205,41 +238,41 @@ def draw_menu_base():
     screen.blit(title_surf, title_rect)
 
 def draw_main_menu():
-    global play_rect, quit_rect
+    global play_rect, skin_rect, quit_rect
     draw_menu_base()
     
-    # Bottone Play
     play_surf = font.render("- Play -", True, WHITE)
     play_rect = play_surf.get_rect(center=(WIDTH//2, HEIGHT//2 + 20))
     screen.blit(play_surf, play_rect)
     
-    # Bottone Quit
+    skin_display_name = SKINS[current_skin_idx].capitalize()
+    skin_surf = font.render(f"- Skin: {skin_display_name} -", True, WHITE)
+    skin_rect = skin_surf.get_rect(center=(WIDTH//2, HEIGHT//2 + 90))
+    screen.blit(skin_surf, skin_rect)
+    
     quit_surf = font.render("- Quit -", True, QUIT_RED)
-    quit_rect = quit_surf.get_rect(center=(WIDTH//2, HEIGHT//2 + 90))
+    quit_rect = quit_surf.get_rect(center=(WIDTH//2, HEIGHT//2 + 160))
     screen.blit(quit_surf, quit_rect)
     
-    # Crediti in basso a sinistra
-    credits_surf = font_small.render("by Mc Quer Albs Studios", True, CREDITS_GRAY)
+    credits_surf = font_small.render("by Mc Quer Albus Studios", True, CREDITS_GRAY)
     credits_rect = credits_surf.get_rect(bottomleft=(30, HEIGHT - 30))
     screen.blit(credits_surf, credits_rect)
 
 def draw_mode_menu():
     global standard_rect, chaos_rect
-    draw_menu_base() # Disegna solo sfondo e Titolo (le altre scritte scompaiono)
+    draw_menu_base() 
     
-    # Bottone Standard (A Sinistra)
     standard_surf = font.render("- Standard -", True, WHITE)
     standard_rect = standard_surf.get_rect(center=(WIDTH//2 - 140, HEIGHT//2 + 40))
     screen.blit(standard_surf, standard_rect)
     
-    # Bottone Chaos (A Destra, Rosso chiaro)
     chaos_surf = font.render("- Chaos -", True, CHECK_RED_LIGHT)
     chaos_rect = chaos_surf.get_rect(center=(WIDTH//2 + 140, HEIGHT//2 + 40))
     screen.blit(chaos_surf, chaos_rect)
 
 # ---------------- WIN SCREEN ----------------
 def draw_win_screen(winner_text):
-    global rematch_rect, win_quit_rect
+    global rematch_rect, win_quit_rect, win_menu_rect
     
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 170))
@@ -261,6 +294,10 @@ def draw_win_screen(winner_text):
     win_quit_surf = font.render("- Quit -", True, QUIT_RED)
     win_quit_rect = win_quit_surf.get_rect(center=(WIDTH//2, HEIGHT//2 + 75))
     screen.blit(win_quit_surf, win_quit_rect)
+
+    win_menu_surf = font_small.render("- Menu -", True, WHITE)
+    win_menu_rect = win_menu_surf.get_rect(bottomleft=(30, HEIGHT - 30))
+    screen.blit(win_menu_surf, win_menu_rect)
 
 # ---------------- LOGICA SCACCHI ----------------
 def path_clear(x1, y1, x2, y2):
@@ -298,9 +335,7 @@ def is_under_attack(tx, ty, color):
     return False
 
 def get_check_path(color):
-    """Trova le linee di attacco verso QUALSIASI re del colore corrente (Valido anche in Chaos)"""
     path = []
-    # Cerca tutti i re del colore corrente presenti sulla scacchiera
     kings_positions = []
     for y in range(8):
         for x in range(8):
@@ -336,17 +371,16 @@ def valid_move(x1, y1, x2, y2):
     if target != "" and target[0] == color: return False
     dx, dy = x2 - x1, y2 - y1
 
-    # Arrocco (Consentito solo in modalità STANDARD)
     if kind == "k" and abs(dx) == 2 and dy == 0 and game_mode == "STANDARD":
         row = 7 if color == "w" else 0
         if y1 != row or y2 != row: return False
-        if dx == 2: # Corto
+        if dx == 2: 
             rook_key = "wr_r" if color == "w" else "br_r"
             if not has_moved[color + "k"] and not has_moved.get(rook_key, False):
                 if board[row][5] == "" and board[row][6] == "":
                     if not is_under_attack(4, row, color) and not is_under_attack(5, row, color) and not is_under_attack(6, row, color):
                         return True
-        elif dx == -2: # Lungo
+        elif dx == -2: 
             rook_key = "wr_l" if color == "w" else "br_l"
             if not has_moved[color + "k"] and not has_moved.get(rook_key, False):
                 if board[row][1] == "" and board[row][2] == "" and board[row][3] == "":
@@ -392,7 +426,6 @@ def draw_highlights():
                 target_piece = board[y][mx]
 
             if p_selected and p_selected[1] == "k" and abs(mx - x) == 2:
-                # Arrocco (Verde Chiaro)
                 color = CASTLE_LIGHT if (mx + my) % 2 == 0 else CASTLE_DARK
             elif is_capture:
                 if target_piece != "" and target_piece[1] == "k":
@@ -405,37 +438,44 @@ def draw_highlights():
             pygame.draw.rect(screen, color, (OFFSET_X + mx * TILE, OFFSET_Y + my * TILE, TILE, TILE))
 
 def draw_board():
-    bg = BG_WHITE if turn == "w" else BG_BLACK
+    skin_name = SKINS[current_skin_idx]
+    colors = SKIN_COLORS[skin_name]
+    
+    bg = colors["bg_w"] if turn == "w" else colors["bg_b"]
     screen.fill(bg)
     
-    pygame.draw.rect(screen, BOARD_BORDER_COLOR, (
+    pygame.draw.rect(screen, colors["border"], (
         OFFSET_X - BORDER_THICKNESS, OFFSET_Y - BORDER_THICKNESS, 
         BOARD_SIZE + (BORDER_THICKNESS * 2), BOARD_SIZE + (BORDER_THICKNESS * 2)
     ))
     
     for y in range(8):
         for x in range(8):
-            color = LIGHT if (x+y)%2==0 else DARK
+            color = colors["light"] if (x+y)%2==0 else colors["dark"]
             pygame.draw.rect(screen, color, (OFFSET_X + x*TILE, OFFSET_Y + y*TILE, TILE, TILE))
             
-    # Colora di Rosso il percorso dello scacco
     check_path = get_check_path(turn)
     for cx, cy in check_path:
         r_color = CHECK_RED_LIGHT if (cx + cy) % 2 == 0 else CHECK_RED_DARK
         pygame.draw.rect(screen, r_color, (OFFSET_X + cx*TILE, OFFSET_Y + cy*TILE, TILE, TILE))
 
 def draw_pieces():
+    skin_name = SKINS[current_skin_idx]
+    
+    OFFSET_CENTER = PIECE_OFFSET
+    if skin_name == "woody" and "wp" in PIECE_IMAGES["woody"]:
+        OFFSET_CENTER = (TILE - PIECE_IMAGES["woody"]["wp"].get_width()) // 2
+        
     for y in range(8):
         for x in range(8):
             p = board[y][x]
-            if p != "" and p in PIECE_IMAGES:
+            if p != "" and p in PIECE_IMAGES[skin_name]:
                 screen.blit(
-                    PIECE_IMAGES[p], 
-                    (OFFSET_X + x * TILE + PIECE_OFFSET, OFFSET_Y + y * TILE + PIECE_OFFSET)
+                    PIECE_IMAGES[skin_name][p], 
+                    (OFFSET_X + x * TILE + OFFSET_CENTER, OFFSET_Y + y * TILE + OFFSET_CENTER)
                 )
 
 def check_king():
-    """Controlla se almeno un re bianco e un re nero sono vivi (funziona anche per i Re multipli in Chaos)"""
     w = b = False
     for row in board:
         for p in row:
@@ -462,6 +502,11 @@ while running:
             w, b = check_king()
             if not w: game_over = True; winner = "BLACK WINS"
             if not b: game_over = True; winner = "WHITE WINS"
+            
+            # Disegna il tasto "M" in basso a sinistra mentre la partita è in corso
+            ingame_menu_surf = font.render("m", True, WHITE)
+            ingame_menu_rect = ingame_menu_surf.get_rect(bottomleft=(10, HEIGHT - 10))
+            screen.blit(ingame_menu_surf, ingame_menu_rect)
         
         if game_over:
             draw_win_screen(winner)
@@ -476,7 +521,9 @@ while running:
             # 1. Click nello stato MENU PRINCIPALE
             if game_state == "MENU":
                 if play_rect and play_rect.collidepoint((mx, my)):
-                    game_state = "MODE_MENU" # Passa alla selezione della modalità
+                    game_state = "MODE_MENU"
+                elif skin_rect and skin_rect.collidepoint((mx, my)):
+                    current_skin_idx = (current_skin_idx + 1) % len(SKINS)
                 elif quit_rect and quit_rect.collidepoint((mx, my)):
                     running = False
             
@@ -498,57 +545,59 @@ while running:
                         reset_game()
                     elif win_quit_rect and win_quit_rect.collidepoint((mx, my)):
                         running = False
+                    elif win_menu_rect and win_menu_rect.collidepoint((mx, my)):
+                        generate_menu_background()
+                        game_state = "MENU"
                 else:
-                    x = (mx - OFFSET_X)//TILE
-                    y = (my - OFFSET_Y)//TILE
+                    # Controllo se è stato cliccato il tasto "M"
+                    if ingame_menu_rect and ingame_menu_rect.collidepoint((mx, my)):
+                        generate_menu_background()
+                        game_state = "MENU"
+                    else:
+                        x = (mx - OFFSET_X)//TILE
+                        y = (my - OFFSET_Y)//TILE
 
-                    if 0 <= x < 8 and 0 <= y < 8:
-                        if selected:
-                            x1, y1 = selected
-                            piece = board[y1][x1]
+                        if 0 <= x < 8 and 0 <= y < 8:
+                            if selected:
+                                x1, y1 = selected
+                                piece = board[y1][x1]
 
-                            if valid_move(x1, y1, x, y):
-                                # Registrazione movimento per Arrocco
-                                if piece == "wk": has_moved["wk"] = True
-                                if piece == "bk": has_moved["bk"] = True
-                                if piece == "wr" and x1 == 0 and y1 == 7: has_moved["wr_l"] = True
-                                if piece == "wr" and x1 == 7 and y1 == 7: has_moved["wr_r"] = True
-                                if piece == "br" and x1 == 0 and y1 == 0: has_moved["br_l"] = True
-                                if piece == "br" and x1 == 7 and y1 == 0: has_moved["br_r"] = True
-                                
-                                # Esecuzione Arrocco
-                                if piece[1] == "k" and abs(x - x1) == 2:
-                                    if x > x1: 
-                                        board[y][5] = board[y][7]; board[y][7] = ""
-                                    else: 
-                                        board[y][3] = board[y][0]; board[y][0] = ""
+                                if valid_move(x1, y1, x, y):
+                                    if piece == "wk": has_moved["wk"] = True
+                                    if piece == "bk": has_moved["bk"] = True
+                                    if piece == "wr" and x1 == 0 and y1 == 7: has_moved["wr_l"] = True
+                                    if piece == "wr" and x1 == 7 and y1 == 7: has_moved["wr_r"] = True
+                                    if piece == "br" and x1 == 0 and y1 == 0: has_moved["br_l"] = True
+                                    if piece == "br" and x1 == 7 and y1 == 0: has_moved["br_r"] = True
+                                    
+                                    if piece[1] == "k" and abs(x - x1) == 2:
+                                        if x > x1: 
+                                            board[y][5] = board[y][7]; board[y][7] = ""
+                                        else: 
+                                            board[y][3] = board[y][0]; board[y][0] = ""
 
-                                # En Passant
-                                if piece[1] == "p" and abs(x - x1) == 1 and board[y][x] == "":
-                                    board[y1][x] = ""
+                                    if piece[1] == "p" and abs(x - x1) == 1 and board[y][x] == "":
+                                        board[y1][x] = ""
 
-                                # Spostamento Pezzo
-                                board[y][x] = piece
-                                board[y1][x1] = ""
+                                    board[y][x] = piece
+                                    board[y1][x1] = ""
 
-                                # Promozione Pedone Automatica in Regina
-                                if piece[1] == "p" and (y == 0 or y == 7):
-                                    board[y][x] = piece[0] + "q"
+                                    if piece[1] == "p" and (y == 0 or y == 7):
+                                        board[y][x] = piece[0] + "q"
 
-                                # En Passant setup doppio passo
-                                if piece[1] == "p" and abs(y - y1) == 2:
-                                    last_double_pawn = (x, y, piece[0])
-                                else:
-                                    last_double_pawn = None
+                                    if piece[1] == "p" and abs(y - y1) == 2:
+                                        last_double_pawn = (x, y, piece[0])
+                                    else:
+                                        last_double_pawn = None
 
-                                turn = "b" if turn == "w" else "w"
+                                    turn = "b" if turn == "w" else "w"
 
-                            selected = None
-                            valid_moves = []
-                        else:
-                            if board[y][x] != "" and board[y][x][0] == turn:
-                                selected = (x, y)
-                                valid_moves = [(i, j) for i in range(8) for j in range(8) if valid_move(x, y, i, j)]
+                                selected = None
+                                valid_moves = []
+                            else:
+                                if board[y][x] != "" and board[y][x][0] == turn:
+                                    selected = (x, y)
+                                    valid_moves = [(i, j) for i in range(8) for j in range(8) if valid_move(x, y, i, j)]
 
     pygame.display.flip()
 
